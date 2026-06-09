@@ -203,24 +203,17 @@ data.forEach((r,i) => dateIndex[r.date] = i);
 function calcTarget(){
   const startStr = document.getElementById('work-start').value;
   const endStr   = document.getElementById('work-end').value;
-
   const effectiveStart = startStr || YEAR_START;
   const effectiveEnd   = endStr   || YEAR_END;
-
   const start = new Date(effectiveStart);
   const end   = new Date(effectiveEnd);
   const yearStart = new Date(YEAR_START);
   const yearEnd   = new Date(YEAR_END);
-
-  // 실제 근무 기간을 학년도 범위로 클램핑
   const clampedStart = start < yearStart ? yearStart : start;
   const clampedEnd   = end   > yearEnd   ? yearEnd   : end;
-
-  // 개월수 계산 (시작월 포함, 종료월 포함)
   const sy = clampedStart.getFullYear(), sm = clampedStart.getMonth();
   const ey = clampedEnd.getFullYear(),   em = clampedEnd.getMonth();
   const months = Math.min(12, (ey - sy) * 12 + (em - sm) + 1);
-
   if(months >= 12){
     TARGET = BASE_TARGET;
     document.getElementById('target-info').textContent = '목표 유급일수: 323일 (1년 기준)';
@@ -241,45 +234,73 @@ function inRange(date){
   return date >= startStr && date <= endStr;
 }
 
+// 날짜 문자열로 해당 주 월요일 Date 반환
+function getMonday(dateStr){
+  const dt = new Date(dateStr);
+  const jsDay = dt.getDay(); // 0=일,1=월,...,6=토
+  const diff = (jsDay === 0) ? -6 : 1 - jsDay;
+  dt.setDate(dt.getDate() + diff);
+  return dt;
+}
+
+// 해당 주(월~금) 유효 근무일수 계산
+// 방학식이 포함된 주: 학기중 근무일(방학식 포함) + 방학중 근무 선택일 합산
+// 일반 방학 주: 방학중 근무 선택일만
+function countWeekWorkDays(mondayDate){
+  let hasVacSign = false;
+  for(let i = 0; i < 5; i++){
+    const dd = new Date(mondayDate); dd.setDate(dd.getDate() + i);
+    const key = dd.toISOString().slice(0,10);
+    if(dateIndex[key] !== undefined && data[dateIndex[key]].vacationSign) hasVacSign = true;
+  }
+  let cnt = 0;
+  for(let i = 0; i < 5; i++){
+    const dd = new Date(mondayDate); dd.setDate(dd.getDate() + i);
+    const key = dd.toISOString().slice(0,10);
+    if(dateIndex[key] !== undefined){
+      const row = data[dateIndex[key]];
+      if(hasVacSign){
+        // 방학식 주: 학기중 근무일 OR 방학중 근무 선택 모두 카운트
+        if(row.operation === '학기중') cnt++;
+        else if(isVac(row.operation) && row.vacationWork) cnt++;
+      } else {
+        // 일반 방학 주: 방학중 근무 선택만
+        if(isVac(row.operation) && row.vacationWork) cnt++;
+      }
+    }
+  }
+  return cnt;
+}
+
 function calcStatus(d){
   if(!inRange(d.date)) return null;
   if(d.operation === '학기중') return '유급';
   if(d.holiday || d.vacationWork) return '유급';
+
+  // 일요일 유급 판단
   if(d.weekday === 7){
-    const mon = new Date(d.date); mon.setDate(mon.getDate()-6);
-    let cnt = 0;
-    for(let i=0;i<6;i++){
-      const dd = new Date(mon); dd.setDate(dd.getDate()+i);
-      const key = dd.toISOString().slice(0,10);
-      if(dateIndex[key]!==undefined){
-        const row = data[dateIndex[key]];
-        if(isVac(row.operation) && row.vacationWork) cnt++;
-      }
-    }
+    const mon = getMonday(d.date);
+    const cnt = countWeekWorkDays(mon);
     if(cnt >= 2) return '유급';
   }
+
+  // 토요일 유급 판단: 이번 주 2일 이상 + 다음 주 1일 이상
   if(d.weekday === 6){
-    const mon = new Date(d.date); mon.setDate(mon.getDate()-5);
-    let cntThis = 0;
-    for(let i=0;i<5;i++){
-      const dd = new Date(mon); dd.setDate(dd.getDate()+i);
-      const key = dd.toISOString().slice(0,10);
-      if(dateIndex[key]!==undefined){
-        const row = data[dateIndex[key]];
-        if(isVac(row.operation) && row.vacationWork) cntThis++;
-      }
-    }
+    const mon = getMonday(d.date);
+    const cntThis = countWeekWorkDays(mon);
+    // 다음 주 방학중근무 1일 이상 (토 기준 +1~+7일 중 방학중 근무 선택)
     let cntNext = 0;
-    for(let i=1;i<=7;i++){
-      const dd = new Date(d.date); dd.setDate(dd.getDate()+i);
+    for(let i = 1; i <= 7; i++){
+      const dd = new Date(d.date); dd.setDate(dd.getDate() + i);
       const key = dd.toISOString().slice(0,10);
-      if(dateIndex[key]!==undefined){
+      if(dateIndex[key] !== undefined){
         const row = data[dateIndex[key]];
         if(isVac(row.operation) && row.vacationWork) cntNext++;
       }
     }
     if(cntThis >= 2 && cntNext >= 1) return '유급';
   }
+
   return '무급';
 }
 
