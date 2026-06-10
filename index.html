@@ -234,42 +234,50 @@ function inRange(date){
   return date >= startStr && date <= endStr;
 }
 
-// 날짜 문자열로 해당 주 월요일 Date 반환
 function getMonday(dateStr){
   const dt = new Date(dateStr);
-  const jsDay = dt.getDay(); // 0=일,1=월,...,6=토
+  const jsDay = dt.getDay();
   const diff = (jsDay === 0) ? -6 : 1 - jsDay;
   dt.setDate(dt.getDate() + diff);
   return dt;
 }
 
-// 해당 주(월~금) 유효 근무일수 계산
-// 방학식이 포함된 주: 학기중 근무일(방학식 포함) + 방학중 근무 선택일 합산
-// 일반 방학 주: 방학중 근무 선택일만
-function countWeekWorkDays(mondayDate){
-  let hasVacSign = false;
-  for(let i = 0; i < 5; i++){
-    const dd = new Date(mondayDate); dd.setDate(dd.getDate() + i);
-    const key = dd.toISOString().slice(0,10);
-    if(dateIndex[key] !== undefined && data[dateIndex[key]].vacationSign) hasVacSign = true;
-  }
+// 해당 주(월~금) 방학중 근무일수만 카운트 (토·일 원칙 판단용)
+function countVacWorkDays(mondayDate){
   let cnt = 0;
   for(let i = 0; i < 5; i++){
     const dd = new Date(mondayDate); dd.setDate(dd.getDate() + i);
     const key = dd.toISOString().slice(0,10);
     if(dateIndex[key] !== undefined){
       const row = data[dateIndex[key]];
-      if(hasVacSign){
-        // 방학식 주: 학기중 근무일 OR 방학중 근무 선택 모두 카운트
-        if(row.operation === '학기중') cnt++;
-        else if(isVac(row.operation) && row.vacationWork) cnt++;
-      } else {
-        // 일반 방학 주: 방학중 근무 선택만
-        if(isVac(row.operation) && row.vacationWork) cnt++;
-      }
+      if(isVac(row.operation) && row.vacationWork) cnt++;
     }
   }
   return cnt;
+}
+
+// 방학식 주 예외: 해당 주 학기중 근무일수 카운트 (일요일 유급 예외 판단용)
+function countSchoolWorkDays(mondayDate){
+  let cnt = 0;
+  for(let i = 0; i < 5; i++){
+    const dd = new Date(mondayDate); dd.setDate(dd.getDate() + i);
+    const key = dd.toISOString().slice(0,10);
+    if(dateIndex[key] !== undefined){
+      const row = data[dateIndex[key]];
+      if(row.operation === '학기중') cnt++;
+    }
+  }
+  return cnt;
+}
+
+// 해당 주에 방학식이 있는지 확인
+function hasVacSign(mondayDate){
+  for(let i = 0; i < 5; i++){
+    const dd = new Date(mondayDate); dd.setDate(dd.getDate() + i);
+    const key = dd.toISOString().slice(0,10);
+    if(dateIndex[key] !== undefined && data[dateIndex[key]].vacationSign) return true;
+  }
+  return false;
 }
 
 function calcStatus(d){
@@ -277,18 +285,20 @@ function calcStatus(d){
   if(d.operation === '학기중') return '유급';
   if(d.holiday || d.vacationWork) return '유급';
 
+  const mon = getMonday(d.date);
+
   // 일요일 유급 판단
   if(d.weekday === 7){
-    const mon = getMonday(d.date);
-    const cnt = countWeekWorkDays(mon);
-    if(cnt >= 2) return '유급';
+    // 원칙: 이번 주 방학중 근무 2일 이상
+    if(countVacWorkDays(mon) >= 2) return '유급';
+    // 예외: 방학식 주이고 학기중 근무일 2일 이상 (방학식 포함)
+    if(hasVacSign(mon) && countSchoolWorkDays(mon) >= 2) return '유급';
   }
 
-  // 토요일 유급 판단: 이번 주 2일 이상 + 다음 주 1일 이상
+  // 토요일 유급 판단: 항상 방학중 근무일수만 카운트
   if(d.weekday === 6){
-    const mon = getMonday(d.date);
-    const cntThis = countWeekWorkDays(mon);
-    // 다음 주 방학중근무 1일 이상 (토 기준 +1~+7일 중 방학중 근무 선택)
+    const cntThis = countVacWorkDays(mon);
+    // 다음 주 방학중 근무 1일 이상
     let cntNext = 0;
     for(let i = 1; i <= 7; i++){
       const dd = new Date(d.date); dd.setDate(dd.getDate() + i);
