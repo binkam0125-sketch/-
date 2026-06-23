@@ -168,7 +168,7 @@ tr.month-header td{background:#f8f9fa;font-size:11px;font-weight:700;color:#888;
 
   <!-- 방학 비율 카드 -->
   <div class="ratio-card">
-    <h3>📊 방학 중 유급일 배분 현황 <span style="font-size:11px;font-weight:400;color:#aaa">(권고: 여름 1/3 · 겨울 2/3)</span></h3>
+    <h3>📊 방학 중 유급일 배분 현황 <span style="font-size:11px;font-weight:400;color:#aaa">(잔여일수 기준 권고: 여름 1/3 · 겨울 2/3)</span></h3>
     <div class="ratio-grid">
       <div class="ratio-item">
         <div class="ratio-item-label">🌞 여름방학 유급</div>
@@ -187,7 +187,7 @@ tr.month-header td{background:#f8f9fa;font-size:11px;font-weight:700;color:#888;
         </div>
       </div>
     </div>
-    <div class="ratio-hint">* 방학 중 유급일은 여름 1/3, 겨울 2/3 비율이 권고사항입니다. 강제사항은 아닙니다.</div>
+    <div class="ratio-hint">* 잔여 필요일수를 여름 1/3 · 겨울 2/3로 배분했을 때의 권고 목표입니다. 강제사항은 아닙니다.</div>
   </div>
 
   <div class="filter-row">
@@ -439,19 +439,22 @@ function updateStats(){
   document.getElementById('prog-label').textContent = total+' / '+TARGET+'일';
   document.getElementById('prog-pct').textContent = pct+'%';
 
-  // ──────────────────────────────────────────
-  // 변경 4: 방학 유급 비율 표시 업데이트
-  // ──────────────────────────────────────────
-  const guideSum = Math.round(vacPaid / 3);       // 1/3
-  const guideWin = vacPaid - guideSum;             // 2/3
+  // 방학 유급 비율: 잔여일수 기준으로 여름 1/3 · 겨울 2/3 목표 표시
+  // 잔여일수 중 방학으로 채워야 할 몫 = 잔여일수 전체를 비율로 배분
+  const guideSum = Math.round(remain / 3);      // 잔여의 1/3 → 여름 목표
+  const guideWin = remain - guideSum;            // 잔여의 2/3 → 겨울 목표
+
+  // 여름: 현재 sumPaid / 목표 guideSum
   const maxSum = Math.max(sumPaid, guideSum, 1);
-  const maxWin = Math.max(winPaid, guideWin, 1);
   document.getElementById('ratio-bar-sum').style.width = Math.min(100, Math.round(sumPaid / maxSum * 100)) + '%';
-  document.getElementById('ratio-bar-win').style.width = Math.min(100, Math.round(winPaid / maxWin * 100)) + '%';
   document.getElementById('ratio-sum-actual').textContent = sumPaid + '일 (현재)';
+  document.getElementById('ratio-sum-guide').textContent  = remain > 0 ? `목표 ${guideSum}일 (잔여 1/3)` : '목표 —일';
+
+  // 겨울: 현재 winPaid / 목표 guideWin
+  const maxWin = Math.max(winPaid, guideWin, 1);
+  document.getElementById('ratio-bar-win').style.width = Math.min(100, Math.round(winPaid / maxWin * 100)) + '%';
   document.getElementById('ratio-win-actual').textContent = winPaid + '일 (현재)';
-  document.getElementById('ratio-sum-guide').textContent  = vacPaid > 0 ? `권고 ${guideSum}일 (1/3)` : '권고 —일';
-  document.getElementById('ratio-win-guide').textContent  = vacPaid > 0 ? `권고 ${guideWin}일 (2/3)` : '권고 —일';
+  document.getElementById('ratio-win-guide').textContent  = remain > 0 ? `목표 ${guideWin}일 (잔여 2/3)` : '목표 —일';
 }
 
 function getFiltered(){
