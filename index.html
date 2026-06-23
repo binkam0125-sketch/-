@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Noto Sans KR',sans-serif;background:#f5f6fa;color:#222;font-size:14px}
@@ -544,21 +544,99 @@ function buildMonthFilter(){
   });
 }
 
-function downloadExcel(){
+async function downloadExcel(){
   const job = document.getElementById('job-select').value;
-  const wb = XLSX.utils.book_new();
-  const wsData = [['연번','일자','연도','월','요일(숫자)','요일(문자)','공휴일','운영구분','방학중근무','방학식 여부','구분']];
+  const wb = new ExcelJS.Workbook();
+  wb.creator = '방학중비근무자산정';
+  const ws = wb.addWorksheet('유급일');
+
+  // 열 정의 (요일 숫자 열 제거)
+  ws.columns = [
+    { header: '연번',      key: 'seq',      width: 8  },
+    { header: '일자',      key: 'date',     width: 14 },
+    { header: '연도',      key: 'year',     width: 10 },
+    { header: '월',        key: 'month',    width: 8  },
+    { header: '요일',      key: 'weekday',  width: 8  },
+    { header: '공휴일',    key: 'holiday',  width: 14 },
+    { header: '운영구분',  key: 'operation',width: 12 },
+    { header: '방학중근무',key: 'work',     width: 16 },
+    { header: '방학식여부',key: 'sign',     width: 12 },
+    { header: '구분',      key: 'status',   width: 8  },
+  ];
+
+  // 공통 폰트/정렬
+  const font = { name: 'Noto Sans KR', size: 10 };
+  const alignCenter = { horizontal: 'center', vertical: 'middle' };
+
+  // 헤더 스타일
+  const headerRow = ws.getRow(1);
+  headerRow.eachCell(cell => {
+    cell.font = { ...font, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A73E8' } };
+    cell.alignment = alignCenter;
+    cell.border = {
+      top:    { style: 'thin', color: { argb: 'FFCCCCCC' } },
+      bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+      left:   { style: 'thin', color: { argb: 'FFCCCCCC' } },
+      right:  { style: 'thin', color: { argb: 'FFCCCCCC' } },
+    };
+  });
+  headerRow.height = 22;
+
+  // 데이터 행
   let seq = 1;
   data.forEach(d => {
     const s = calcStatus(d);
     if(s === null) return;
-    wsData.push([seq++, d.date, d.date.slice(0,4)+'년', parseInt(d.date.slice(5,7))+'월',
-      d.weekday, d.weekdayName, d.holiday, d.operation, d.vacationWork, d.vacationSign, s]);
+    const row = ws.addRow({
+      seq:       seq++,
+      date:      d.date,
+      year:      d.date.slice(0,4)+'년',
+      month:     parseInt(d.date.slice(5,7))+'월',
+      weekday:   d.weekdayName,
+      holiday:   d.holiday,
+      operation: d.operation,
+      work:      d.vacationWork,
+      sign:      d.vacationSign,
+      status:    s,
+    });
+    row.height = 18;
+
+    // 유급/무급 색상
+    const isVacRow = isVac(d.operation);
+    const bgColor = s === '유급'
+      ? (isVacRow ? 'FFE8F5E9' : 'FFFFFFFF')
+      : 'FFF5F5F5';
+    const statusColor = s === '유급' ? 'FF2E7D32' : 'FF888888';
+
+    row.eachCell((cell, colNumber) => {
+      cell.font = colNumber === 10
+        ? { ...font, bold: true, color: { argb: statusColor } }
+        : { ...font };
+      cell.alignment = alignCenter;
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+      cell.border = {
+        top:    { style: 'thin', color: { argb: 'FFEEEEEE' } },
+        bottom: { style: 'thin', color: { argb: 'FFEEEEEE' } },
+        left:   { style: 'thin', color: { argb: 'FFEEEEEE' } },
+        right:  { style: 'thin', color: { argb: 'FFEEEEEE' } },
+      };
+    });
   });
-  const ws = XLSX.utils.aoa_to_sheet(wsData);
-  ws['!cols'] = [8,12,8,6,10,10,12,10,16,12,8].map(w=>({wch:w}));
-  XLSX.utils.book_append_sheet(wb, ws, '유급일');
-  XLSX.writeFile(wb, `방학중비근무자_유급일수_${job}_2026.xlsx`);
+
+  // 모든 열 자동필터
+  ws.autoFilter = {
+    from: { row: 1, column: 1 },
+    to:   { row: 1, column: ws.columns.length }
+  };
+
+  // 다운로드
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `방학중비근무자_유급일수_${job}_2026.xlsx`;
+  a.click(); URL.revokeObjectURL(url);
 }
 
 buildMonthFilter();
