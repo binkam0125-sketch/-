@@ -120,11 +120,11 @@ tr.month-header td{background:#f8f9fa;font-size:11px;font-weight:700;color:#888;
       <div class="vac-grid">
         <div class="setting-item">
           <label>방학식 날짜</label>
-          <input type="date" id="sum-sign" value="2026-07-27" onchange="onSumSignChange()">
+          <input type="date" id="sum-sign" value="2026-07-28" onchange="onSumSignChange()">
         </div>
         <div class="setting-item">
           <label>방학 시작일 <span style="color:#1a73e8;font-weight:400">(방학식 다음날 자동 입력)</span></label>
-          <input type="date" id="sum-start" value="2026-07-28" readonly style="background:#f5f8ff;color:#888;cursor:not-allowed">
+          <input type="date" id="sum-start" value="2026-07-29" readonly style="background:#f5f8ff;color:#888;cursor:not-allowed">
         </div>
         <div class="setting-item">
           <label>방학 종료일 (개학 전날)</label>
@@ -642,7 +642,39 @@ async function downloadExcel(){
   a.click(); URL.revokeObjectURL(url);
 }
 
+// ── localStorage: 설정 저장/불러오기 ──────────
+const SAVE_KEYS = ['job-select','work-start','work-end','sum-sign','sum-end','win-sign','win-end'];
+
+function saveSettings() {
+  SAVE_KEYS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) localStorage.setItem('vac_' + id, el.value);
+  });
+}
+
+function loadSettings() {
+  SAVE_KEYS.forEach(id => {
+    const saved = localStorage.getItem('vac_' + id);
+    const el = document.getElementById(id);
+    if (saved !== null && el) el.value = saved;
+  });
+  // 방학식 날짜에 맞게 시작일 자동 동기화
+  onSumSignChange();
+  onWinSignChange();
+}
+
+// 각 입력값 변경 시 자동 저장
+SAVE_KEYS.forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('change', saveSettings);
+});
+
+// 설정 적용 버튼도 저장
+const origApply = applySettings;
+window.applySettings = function() { saveSettings(); origApply(); };
+
 buildMonthFilter();
+loadSettings();   // 저장된 설정 불러오기
 calcTarget();
 updateStats();
 renderTable();
