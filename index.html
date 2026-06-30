@@ -380,7 +380,7 @@ function calcStatus(d){
   return '무급';
 }
 
-function applySettings(){
+function applySettings(silent){
   const sumSign  = document.getElementById('sum-sign').value;
   const sumStart = document.getElementById('sum-start').value;
   const sumEnd   = document.getElementById('sum-end').value;
@@ -408,7 +408,7 @@ function applySettings(){
   calcTarget();
   updateStats();
   renderTable();
-  alert('설정이 적용되었습니다!');
+  if(!silent) alert('설정이 적용되었습니다!');
 }
 
 function updateStats(){
@@ -643,7 +643,8 @@ async function downloadExcel(){
 }
 
 // ── localStorage: 설정 저장/불러오기 ──────────
-const SAVE_KEYS = ['job-select','work-start','work-end','sum-sign','sum-end','win-sign','win-end'];
+const SAVE_KEYS = ['job-select','work-start','sum-sign','sum-end','win-sign','win-end'];
+// 변경: 'work-end'(근무 종료일)는 저장 대상에서 제외 — 항상 공란 유지(해당 없으면 비워두는 용도이므로 자동 복원하지 않음)
 
 function saveSettings() {
   SAVE_KEYS.forEach(id => {
@@ -653,6 +654,7 @@ function saveSettings() {
 }
 
 function loadSettings() {
+  localStorage.removeItem('vac_work-end'); // 과거에 저장된 근무 종료일 값 정리(항상 공란이어야 함)
   SAVE_KEYS.forEach(id => {
     const saved = localStorage.getItem('vac_' + id);
     const el = document.getElementById(id);
@@ -671,13 +673,11 @@ SAVE_KEYS.forEach(id => {
 
 // 설정 적용 버튼도 저장
 const origApply = applySettings;
-window.applySettings = function() { saveSettings(); origApply(); };
+window.applySettings = function(silent) { saveSettings(); origApply(silent); };
 
 buildMonthFilter();
-loadSettings();   // 저장된 설정 불러오기
-calcTarget();
-updateStats();
-renderTable();
+loadSettings();   // 저장된 설정(입력값) 불러오기
+applySettings(true);  // 버그 수정: 불러온 설정을 실제 데이터(data)에 반영 (방학식 표시·예외 로직 동작 보장, 초기 로드는 알림 없이)
 </script>
 </body>
 </html>
